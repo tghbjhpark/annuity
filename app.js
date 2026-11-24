@@ -705,6 +705,7 @@ function renderTrendChart() {
 
   if (uniqueDates.length === 0) {
     emptyState.classList.remove('hidden');
+    updateTrendStatsSummary(null, null, null);
     if (trendChartInstance) {
       trendChartInstance.destroy();
       trendChartInstance = null;
@@ -712,6 +713,39 @@ function renderTrendChart() {
     return;
   }
   emptyState.classList.add('hidden');
+
+  const targetAccId = state.selectedAccountId || 'ALL';
+  const targetAccObj = state.dashboard.accounts.find((a) => a.account_id === targetAccId);
+  const viewName = targetAccObj ? targetAccObj.account_name : '전체 통합';
+  const primarySnapMap = buildSnapshotLookup(allSnapshots, targetAccId);
+
+  // 현재 선택된 뷰(및 기간) 기준 최고점 / 최저점 / 마지막날 산출
+  const validPoints = [];
+  uniqueDates.forEach((d, idx) => {
+    if (primarySnapMap[d] && primarySnapMap[d].total_asset !== null && primarySnapMap[d].total_asset !== undefined) {
+      validPoints.push({
+        index: idx,
+        date: d,
+        value: Number(primarySnapMap[d].total_asset) || 0
+      });
+    }
+  });
+
+  let maxPoint = null;
+  let minPoint = null;
+  let lastPoint = null;
+
+  if (validPoints.length > 0) {
+    maxPoint = validPoints[0];
+    minPoint = validPoints[0];
+    validPoints.forEach((pt) => {
+      if (pt.value >= maxPoint.value) maxPoint = pt;
+      if (pt.value <= minPoint.value) minPoint = pt;
+    });
+    lastPoint = validPoints[validPoints.length - 1];
+  }
+
+  updateTrendStatsSummary(maxPoint, minPoint, lastPoint);
 
   let datasets = [];
 
@@ -747,23 +781,41 @@ function renderTrendChart() {
       });
     });
   } else {
-    const targetAccId = state.selectedAccountId || 'ALL';
-    const targetAccObj = state.dashboard.accounts.find((a) => a.account_id === targetAccId);
-    const viewName = targetAccObj ? targetAccObj.account_name : '전체 통합';
     subtitle.textContent = `${viewName} 기준 일별 총자산 변화 추이`;
 
-    const snapMap = buildSnapshotLookup(allSnapshots, targetAccId);
+    // 최고점, 최저점, 마지막날 포인트 색상/크기 강조
+    const pointColors = uniqueDates.map((_, idx) => {
+      if (maxPoint && idx === maxPoint.index) return '#e11d48'; // rose-600
+      if (minPoint && idx === minPoint.index) return '#2563eb'; // blue-600
+      if (lastPoint && idx === lastPoint.index) return '#4f46e5'; // indigo-600
+      return '#4f46e5';
+    });
+
+    const pointRadii = uniqueDates.map((_, idx) => {
+      if (
+        (maxPoint && idx === maxPoint.index) ||
+        (minPoint && idx === minPoint.index) ||
+        (lastPoint && idx === lastPoint.index)
+      ) {
+        return 6;
+      }
+      return 3;
+    });
 
     datasets = [
       {
         label: `${viewName} 총자산`,
-        data: uniqueDates.map((d) => (snapMap[d] ? snapMap[d].total_asset : null)),
+        data: uniqueDates.map((d) => (primarySnapMap[d] ? primarySnapMap[d].total_asset : null)),
         borderColor: '#4f46e5',
         backgroundColor: 'rgba(79, 70, 229, 0.10)',
+        pointBackgroundColor: pointColors,
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 2,
+        pointRadius: pointRadii,
+        pointHoverRadius: 7,
         fill: true,
         borderWidth: 2.5,
         tension: 0.25,
-        pointRadius: 3.5,
         spanGaps: true
       }
     ];
@@ -773,15 +825,102 @@ function renderTrendChart() {
     trendChartInstance.destroy();
   }
 
+  // 그래프 위에 최고점/최저점/마지막날 금액 라벨을 직접 표시하는 플러그인
+  const keyPointsLabelPlugin = {
+    id: 'keyPointsLabelPlugin',
+    afterDatasetsDraw(chart) {
+      if (state.compareAccounts || !maxPoint || !minPoint || !lastPoint) return;
+      const meta = chart.getDatasetMeta(0);
+      if (!meta || !meta.data || meta.data.length === 0) return;
+
+      const ctx = chart.ctx;
+      const chartArea = chart.chartArea;
+
+      // 인덱스별로 라벨 병합 (예: 마지막날이 최고점과 같으면 '최고·마지막'으로 한 번만 표시)
+      const badgeMap = {};
+      const addBadge = (pt, tag, bgColor) => {
+        if (!pt) return;
+        if (!badgeMap[pt.index]) {
+          badgeMap[pt.index] = {
+            index: pt.index,
+            value: pt.value,
+            tags: [tag],
+            color: bgColor
+          };
+        } else {
+          if (!badgeMap[pt.index].tags.includes(tag)) {
+            badgeMap[pt.index].tags.push(tag);
+          }
+        }
+      };
+
+      addBadge(maxPoint, '최고', '#e11d48');
+      addBadge(minPoint, '최저', '#2563eb');
+      addBadge(lastPoint, '마지막', '#4338ca');
+
+      ctx.save();
+      ctx.font = 'bold 11px Pretendard, -apple-system, sans-serif';
+      ctx.textBaseline = 'middle';
+
+      Object.values(badgeMap).forEach((badge) => {
+        const pointEl = meta.data[badge.index];
+        if (!pointEl) return;
+
+        const { x, y } = pointEl.getProps(['x', 'y'], true);
+        const labelText = `${badge.tags.join('·')} ${formatKRW(badge.value)}`;
+        const textWidth = ctx.measureText(labelText).width;
+        const padX = 7;
+        const boxW = textWidth + padX * 2;
+        const boxH = 20;
+
+        // 최저점은 포인트 아래쪽에, 최고점/마지막날은 위쪽에 배치 (화면 경계 클램핑)
+        const isMinOnly = badge.tags.length === 1 && badge.tags[0] === '최저' && maxPoint.index !== minPoint.index;
+        let boxY = isMinOnly ? y + 10 : y - boxH - 10;
+        if (boxY < chartArea.top + 2) boxY = y + 10;
+        if (boxY + boxH > chartArea.bottom - 2) boxY = y - boxH - 10;
+
+        let boxX = x - boxW / 2;
+        if (boxX < chartArea.left + 2) boxX = chartArea.left + 2;
+        if (boxX + boxW > chartArea.right - 2) boxX = chartArea.right - boxW - 2;
+
+        // 둥근 배경 박스 그리기
+        ctx.fillStyle = badge.color;
+        ctx.beginPath();
+        if (ctx.roundRect) {
+          ctx.roundRect(boxX, boxY, boxW, boxH, 6);
+        } else {
+          ctx.rect(boxX, boxY, boxW, boxH);
+        }
+        ctx.fill();
+
+        // 텍스트 그리기
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'left';
+        ctx.fillText(labelText, boxX + padX, boxY + boxH / 2 + 0.5);
+      });
+
+      ctx.restore();
+    }
+  };
+
   trendChartInstance = new Chart(canvas, {
     type: 'line',
     data: {
       labels: uniqueDates,
       datasets
     },
+    plugins: [keyPointsLabelPlugin],
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      layout: {
+        padding: {
+          top: 26,
+          right: 12,
+          bottom: 8,
+          left: 4
+        }
+      },
       interaction: {
         mode: 'index',
         intersect: false
@@ -823,6 +962,36 @@ function renderTrendChart() {
       }
     }
   });
+}
+
+function updateTrendStatsSummary(maxPoint, minPoint, lastPoint) {
+  const maxAmtEl = document.getElementById('trendMaxAmount');
+  const maxDateEl = document.getElementById('trendMaxDate');
+  const minAmtEl = document.getElementById('trendMinAmount');
+  const minDateEl = document.getElementById('trendMinDate');
+  const lastAmtEl = document.getElementById('trendLastAmount');
+  const lastDateEl = document.getElementById('trendLastDate');
+
+  if (!maxAmtEl) return;
+
+  if (!maxPoint || !minPoint || !lastPoint) {
+    maxAmtEl.textContent = '-';
+    maxDateEl.textContent = '-';
+    minAmtEl.textContent = '-';
+    minDateEl.textContent = '-';
+    lastAmtEl.textContent = '-';
+    lastDateEl.textContent = '-';
+    return;
+  }
+
+  maxAmtEl.textContent = formatKRW(maxPoint.value);
+  maxDateEl.textContent = maxPoint.date;
+
+  minAmtEl.textContent = formatKRW(minPoint.value);
+  minDateEl.textContent = minPoint.date;
+
+  lastAmtEl.textContent = formatKRW(lastPoint.value);
+  lastDateEl.textContent = lastPoint.date;
 }
 
 function buildSnapshotLookup(snapshots, accountId) {

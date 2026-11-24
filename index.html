@@ -371,6 +371,42 @@
           </div>
         </div>
 
+        <!-- 최고점 / 최저점 / 마지막날 요약 배지 바 -->
+        <div id="trendStatsBar" class="grid grid-cols-3 gap-2.5 mb-4">
+          <div class="rounded-xl bg-rose-50/70 border border-rose-200/70 px-3.5 py-2.5">
+            <div class="flex items-center justify-between gap-1">
+              <span class="text-[11px] font-bold text-rose-700 flex items-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-rose-600"></span>
+                최고점
+              </span>
+              <span id="trendMaxDate" class="text-[11px] text-rose-600/80 font-mono tabular-nums">-</span>
+            </div>
+            <p id="trendMaxAmount" class="text-sm sm:text-base font-bold text-rose-950 mt-1 tabular-nums">-</p>
+          </div>
+
+          <div class="rounded-xl bg-blue-50/70 border border-blue-200/70 px-3.5 py-2.5">
+            <div class="flex items-center justify-between gap-1">
+              <span class="text-[11px] font-bold text-blue-700 flex items-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
+                최저점
+              </span>
+              <span id="trendMinDate" class="text-[11px] text-blue-600/80 font-mono tabular-nums">-</span>
+            </div>
+            <p id="trendMinAmount" class="text-sm sm:text-base font-bold text-blue-950 mt-1 tabular-nums">-</p>
+          </div>
+
+          <div class="rounded-xl bg-indigo-50/70 border border-indigo-200/70 px-3.5 py-2.5">
+            <div class="flex items-center justify-between gap-1">
+              <span class="text-[11px] font-bold text-indigo-700 flex items-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-indigo-600"></span>
+                마지막날
+              </span>
+              <span id="trendLastDate" class="text-[11px] text-indigo-600/80 font-mono tabular-nums">-</span>
+            </div>
+            <p id="trendLastAmount" class="text-sm sm:text-base font-bold text-indigo-950 mt-1 tabular-nums">-</p>
+          </div>
+        </div>
+
         <div class="relative flex-1 min-h-[280px] flex items-center justify-center">
           <canvas id="assetTrendChart"></canvas>
           <div id="trendEmptyState" class="hidden absolute inset-0 flex flex-col items-center justify-center text-center p-6 bg-slate-50/60 rounded-xl">
