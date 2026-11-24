@@ -750,7 +750,7 @@ function renderTrendChart() {
     const targetAccId = state.selectedAccountId || 'ALL';
     const targetAccObj = state.dashboard.accounts.find((a) => a.account_id === targetAccId);
     const viewName = targetAccObj ? targetAccObj.account_name : '전체 통합';
-    subtitle.textContent = `${viewName} 기준 일별 총자산 · 주식 평가금 · 현금 추이`;
+    subtitle.textContent = `${viewName} 기준 일별 총자산 변화 추이`;
 
     const snapMap = buildSnapshotLookup(allSnapshots, targetAccId);
 
@@ -764,29 +764,6 @@ function renderTrendChart() {
         borderWidth: 2.5,
         tension: 0.25,
         pointRadius: 3.5,
-        spanGaps: true
-      },
-      {
-        label: '주식(ETF) 평가금',
-        data: uniqueDates.map((d) => (snapMap[d] ? snapMap[d].eval_amount : null)),
-        borderColor: '#0ea5e9',
-        backgroundColor: '#0ea5e9',
-        fill: false,
-        borderWidth: 2,
-        tension: 0.25,
-        pointRadius: 2.5,
-        spanGaps: true
-      },
-      {
-        label: '보유 현금',
-        data: uniqueDates.map((d) => (snapMap[d] ? snapMap[d].cash_amount : null)),
-        borderColor: CASH_COLOR,
-        backgroundColor: CASH_COLOR,
-        fill: false,
-        borderWidth: 1.8,
-        borderDash: [4, 4],
-        tension: 0.25,
-        pointRadius: 2,
         spanGaps: true
       }
     ];
